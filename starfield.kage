@@ -1,0 +1,91 @@
+package main
+
+var C float
+var RedshiftRed [100]float
+var RedshiftGreen [100]float
+var RedshiftBlue [100]float
+var Position vec2
+var Velocity vec2
+var Seed float
+
+func hash(v vec3) vec3 {
+    vx := ((int(v.x)>>8)^int(v.y))*1103515245
+    vy := ((int(v.y)>>8)^int(v.z))*1103515245
+    vz := ((int(v.z)>>8)^int(v.x))*1103515245
+
+    vx = ((int(v.x)>>8)^vy)*1103515245
+    vy = ((int(v.y)>>8)^vz)*1103515245
+    vz = ((int(v.z)>>8)^vx)*1103515245
+
+    vx = ((int(v.x)>>8)^vy)*1103515245
+    vy = ((int(v.y)>>8)^vz)*1103515245
+    vz = ((int(v.z)>>8)^vx)*1103515245
+
+    return vec3(vx, vy, vz)*(2/float(0xffffffff));
+}
+
+// Has no basis in reality - just looks fun :)
+func redshift(speed float, blue bool) vec4 {
+    natural := speed / C * 50
+
+    if blue {
+        natural = 50 - natural
+    } else {
+        natural = 50 + natural
+    }
+
+    return vec4(
+        RedshiftRed[int(natural)],
+        RedshiftGreen[int(natural)],
+        RedshiftBlue[int(natural)],
+        1,
+    )
+}
+
+func randomTint(h vec3) vec4 {
+    return vec4(1.0 - 0.2 * h.x, 1.0 - 0.2 * h.y, 1.0 - 0.2 * h.z, 1.0)
+}
+
+func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
+    relPos := texCoord - vec2(400, 300)
+    plaPos := Position * 10
+
+    speed := length(Velocity)
+    gamma := inversesqrt(1 - (speed * speed) / (C * C))
+    axis := atan2(Velocity.y, Velocity.x)
+
+    if speed == 0 {
+        gamma = 1
+        axis = 0
+    }
+
+    r1 := mat2(
+         cos(axis), sin(axis),
+        -sin(axis), cos(axis),
+    )
+
+    s := mat2(
+        gamma, 0,
+        0, 1,
+    )
+
+    r2 := mat2(
+        cos(axis), -sin(axis),
+        sin(axis),  cos(axis),
+    )
+
+    blue := dot(relPos, Velocity) > 0.0
+
+    relPos *= r1
+    relPos *= s
+    relPos *= r2
+    relPos += plaPos
+
+    h := hash(vec3(relPos.x*100, relPos.y*100, Seed))
+
+    if h.y > 0.99 {
+        return randomTint(h) * redshift(gamma, blue)
+    } else {
+        return vec4(0.0, 0.0, 0.0, 1.0)
+    }
+}
